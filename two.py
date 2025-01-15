@@ -1,6 +1,10 @@
 import asyncio
 from bleak import BleakScanner, BleakClient
 
+# Replace these with the actual UUIDs of your Arduino device
+SERVICE_UUID = "19B10000-E8F2-537E-4F6C-D104768A1214"
+CHARACTERISTIC_UUID = "19B10001-E8F2-537E-4F6C-D104768A1214"
+
 async def scan_and_connect():
     print("Scanning for Bluetooth devices...")
     devices = await BleakScanner.discover()
@@ -26,11 +30,23 @@ async def scan_and_connect():
     print(f"\nConnecting to {selected_device.name} ({selected_device.address})...")
 
     async with BleakClient(selected_device.address) as client:
-        if client.is_connected:
-            print(f"Connected to {selected_device.name} ({selected_device.address}).")
-            # Perform operations with the connected device here
-        else:
-            print(f"Failed to connect to {selected_device.name} ({selected_device.address}).")
+        if not client.is_connected:
+            print(f"Failed to connect to {selected_device.name}.")
+            return
+        
+        print(f"Connected to {selected_device.name} ({selected_device.address}).")
+        # Perform operations with the connected device here
+
+        try:
+            # value = await client.read_gatt_char(CHARACTERISTIC_UUID)
+            # print(f"Value from characteristic {CHARACTERISTIC_UUID}: {value}\n")
+            # write a non zero value
+            write_value = b'\x00'
+            await client.write_gatt_char(CHARACTERISTIC_UUID, write_value)
+            print("wrote a value")
+
+        except Exception as e:
+            print(f"Error interacting with characteristic: {e}")
 
 # Run the main function
 asyncio.run(scan_and_connect())
