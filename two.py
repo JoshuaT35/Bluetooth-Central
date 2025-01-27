@@ -35,8 +35,8 @@ async def scan_and_connect():
             return
         
         print(f"Connected to {selected_device.name} ({selected_device.address}).")
+        
         # Perform operations with the connected device here
-
         try:
             # value = await client.read_gatt_char(CHARACTERISTIC_UUID)
             # print(f"Value from characteristic {CHARACTERISTIC_UUID}: {value}\n")
