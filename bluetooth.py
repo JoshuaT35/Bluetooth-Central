@@ -14,23 +14,35 @@ async def connect_to_arduino():
     print("Scanning for devices...")
 
     # Scan for devices advertising the desired service UUID
-    devices = await BleakScanner.discover(service_uuids=[SERVICE_UUID])
+    devices = await BleakScanner.discover()
 
     if not devices:
-        print(f"No devices found advertising service UUID: {SERVICE_UUID}")
+        print("No devices found. Make sure Bluetooth is enabled and try again.")
         return
 
-    # Assuming the first device is your Arduino
-    arduino_device = devices[0]
-    print(f"Found device: {arduino_device.name} ({arduino_device.address})")
+    print("\nFound devices:")
+    for i, device in enumerate(devices):
+        print(f"{i}: {device.name} ({device.address})")
+
+    try:
+        choice = int(input("\nEnter the number of the device you want to connect to: "))
+        if choice < 0 or choice >= len(devices):
+            print("Invalid choice. Exiting.")
+            return
+    except ValueError:
+        print("Invalid input. Please enter a number. Exiting.")
+        return
+    
+    selected_device = devices[choice]
+    print(f"\nConnecting to {selected_device.name} ({selected_device.address})...")
 
     # Connect to the device
-    async with BleakClient(arduino_device.address) as client:
+    async with BleakClient(selected_device.address) as client:
         if not client.is_connected:
-            print(f"Failed to connect to {arduino_device.name}.")
+            print(f"Failed to connect to {selected_device.name}.")
             return
 
-        print(f"Connected to {arduino_device.name}.")
+        print(f"Connected to {selected_device.name}.")
         
         # Read the value of the characteristics
         try:
