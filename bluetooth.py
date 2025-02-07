@@ -1,18 +1,72 @@
 import asyncio
 from bleak import BleakScanner, BleakClient
 from bleak.exc import BleakError
-
+import kinematics_calc as kmc
+from collections import deque
 
 # IMU sensor UUIDs
 SERVICE_UUID = "19B10000-E8F2-537E-4F6C-D104768A1214"
 SWITCH_CHARACTERISTIC_ACCEL_X_UUID = "19B10010-E8F2-537E-4F6C-D104768A1214"
 SWITCH_CHARACTERISTIC_ACCEL_Y_UUID = "19B10020-E8F2-537E-4F6C-D104768A1214"
 SWITCH_CHARACTERISTIC_ACCEL_Z_UUID = "19B10030-E8F2-537E-4F6C-D104768A1214"
-SWITCH_CHARACTERISTIC_GYRO_X_UUID = "19B10040-E8F2-537E-4F6C-D104768A1214"
-SWITCH_CHARACTERISTIC_GYRO_Y_UUID = "19B10050-E8F2-537E-4F6C-D104768A1214"
-SWITCH_CHARACTERISTIC_GYRO_Z_UUID = "19B10060-E8F2-537E-4F6C-D104768A1214"
+# SWITCH_CHARACTERISTIC_GYRO_X_UUID = "19B10040-E8F2-537E-4F6C-D104768A1214"
+# SWITCH_CHARACTERISTIC_GYRO_Y_UUID = "19B10050-E8F2-537E-4F6C-D104768A1214"
+# SWITCH_CHARACTERISTIC_GYRO_Z_UUID = "19B10060-E8F2-537E-4F6C-D104768A1214"
+SWITCH_CHARACTERISTIC_TIME_UUID = "19B10070-E8F2-537E-4F6C-D104768A1214"
 
-async def connect_to_arduino():
+
+# Data storage (Fixed-length deque for real-time plotting)
+BUFFER_SIZE = 100  # Store last 100 data points
+time_series = deque(maxlen=BUFFER_SIZE)
+ax_series = deque(maxlen=BUFFER_SIZE)
+ay_series = deque(maxlen=BUFFER_SIZE)
+az_series = deque(maxlen=BUFFER_SIZE)
+
+# Async queue for sharing data
+dataQueue = asyncio.Queue()
+
+
+async def ble_read_imu_data(client, dataQueue):
+    """Continuously read data from BLE and push to queue"""
+    try:
+        while True:
+            # get raw byte data
+            ax = await client.read_gatt_char(SWITCH_CHARACTERISTIC_ACCEL_X_UUID)
+            ay = await client.read_gatt_char(SWITCH_CHARACTERISTIC_ACCEL_Y_UUID)
+            az = await client.read_gatt_char(SWITCH_CHARACTERISTIC_ACCEL_Z_UUID)
+            # gx = await client.read_gatt_char(SWITCH_CHARACTERISTIC_GYRO_X_UUID)
+            # gy = await client.read_gatt_char(SWITCH_CHARACTERISTIC_GYRO_Y_UUID)
+            # gz = await client.read_gatt_char(SWITCH_CHARACTERISTIC_GYRO_Z_UUID)
+            time = await client.read_gatt_char(SWITCH_CHARACTERISTIC_TIME_UUID)
+
+            # convert from byte array to int (NOTE: should it be ints?)
+            ax = int.from_bytes(ax, byteorder='little', signed=True)
+            ay = int.from_bytes(ay, byteorder='little', signed=True)
+            az = int.from_bytes(az, byteorder='little', signed=True)
+            # gx = int.from_bytes(gx, byteorder='little', signed=True)
+            # gy = int.from_bytes(gy, byteorder='little', signed=True)
+            # gz = int.from_bytes(gz, byteorder='little', signed=True)
+            time = int.from_bytes(time, byteorder='little', signed=True)
+
+            # Add timestamp
+            timestamp = asyncio.get_event_loop().time()
+
+            # Send data to queue
+            await dataQueue.put((timestamp, ax, ay, az))
+
+            await asyncio.sleep(0.05)  # Adjust as needed for your update rate
+
+    except asyncio.CancelledError:
+        print("Disconnecting...")
+    except KeyboardInterrupt:
+        print("Keyboard interrupt received. Disconnecting...")
+    except Exception as e:
+        print(f"Error interacting with characteristic: {e}")
+
+
+
+
+async def ble_connect_imu(dataQueue):
     print("Scanning for devices...")
 
     devices = await BleakScanner.discover()
@@ -44,41 +98,4 @@ async def connect_to_arduino():
             return
 
         print(f"Connected to {selected_device.name}.")
-
-        # Continue with reading characteristics
-        try:
-            while True:
-                # print("hit\n")
-                ax = await client.read_gatt_char(SWITCH_CHARACTERISTIC_ACCEL_X_UUID)
-                ay = await client.read_gatt_char(SWITCH_CHARACTERISTIC_ACCEL_Y_UUID)
-                az = await client.read_gatt_char(SWITCH_CHARACTERISTIC_ACCEL_Z_UUID)
-                gx = await client.read_gatt_char(SWITCH_CHARACTERISTIC_GYRO_X_UUID)
-                gy = await client.read_gatt_char(SWITCH_CHARACTERISTIC_GYRO_Y_UUID)
-                gz = await client.read_gatt_char(SWITCH_CHARACTERISTIC_GYRO_Z_UUID)
-
-                # convert from byte array to int
-                ax = int.from_bytes(ax, byteorder='little', signed=True)
-                ay = int.from_bytes(ay, byteorder='little', signed=True)
-                az = int.from_bytes(az, byteorder='little', signed=True)
-                gx = int.from_bytes(gx, byteorder='little', signed=True)
-                gy = int.from_bytes(gy, byteorder='little', signed=True)
-                gz = int.from_bytes(gz, byteorder='little', signed=True)
-
-                # debug
-                # print(f"ax is {ax}\n")
-                # print(f"ay is {ay}\n")
-                # print(f"az is {az}\n")
-                # print(f"gx is {gx}\n")
-                # print(f"gy is {gy}\n")
-                # print(f"gz is {gz}\n")
-
-            # Process data here...
-        except asyncio.CancelledError:
-            print("Disconnecting...")
-        except KeyboardInterrupt:
-            print("Keyboard interrupt received. Disconnecting...")
-        except Exception as e:
-            print(f"Error interacting with characteristic: {e}")
-
-if __name__ == "__main__":
-    asyncio.run(connect_to_arduino())
+        await ble_read_imu_data(client, dataQueue)

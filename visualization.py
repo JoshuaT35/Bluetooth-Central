@@ -1,61 +1,54 @@
-'''
-Given:
-- 6 values (ax, ay, az, gx, gy, gz) denoting the current reading
-- 6 values (ax, ay, az, gx, gy, gz) denoting the previous reading
-- The time of the previous and current reading
-
-plot the IMU's location
-'''
-
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.animation as animation
+from collections import deque
+import asyncio
 
-def track_position(accelerations, initial_velocity=[0, 0, 0], initial_position=[0, 0, 0], time_step=1):
-    positions = [list(initial_position)]  # Store positions over time
-    velocities = [list(initial_velocity)]  # Store velocities over time
-    
-    for i in range(1, len(accelerations)):
-        ax, ay, az = accelerations[i]
-        vx, vy, vz = velocities[-1]
-        px, py, pz = positions[-1]
-        
-        # Update velocity using v = u + at
-        new_vx = vx + ax * time_step
-        new_vy = vy + ay * time_step
-        new_vz = vz + az * time_step
-        
-        # Update position using s = ut + (1/2)at^2
-        new_px = px + vx * time_step + 0.5 * ax * (time_step ** 2)
-        new_py = py + vy * time_step + 0.5 * ay * (time_step ** 2)
-        new_pz = pz + vz * time_step + 0.5 * az * (time_step ** 2)
-        
-        velocities.append([new_vx, new_vy, new_vz])
-        positions.append([new_px, new_py, new_pz])
-    
-    return positions
+# Data storage (Fixed-length deque)
+BUFFER_SIZE = 100
+time_series = deque(maxlen=BUFFER_SIZE)
+ax_series = deque(maxlen=BUFFER_SIZE)
+ay_series = deque(maxlen=BUFFER_SIZE)
+az_series = deque(maxlen=BUFFER_SIZE)
 
-# Example usage:
-x_axis_movement = [
-    [0, 0, 0],
-    [1, 1, 1],
-    [2, 2, 2],
-    [3, 3, 3],
-    [3, 3, 3]
-]
+async def update_data(data_queue):
+    """Fetches data from queue and updates the series"""
+    while True:
+        while not data_queue.empty():
+            timestamp, ax, ay, az = await data_queue.get()
+            time_series.append(timestamp)
+            ax_series.append(ax)
+            ay_series.append(ay)
+            az_series.append(az)
+        await asyncio.sleep(0.05)
 
-positions = track_position(x_axis_movement)
+def update_plot(frame):
+    """Matplotlib animation update function"""
+    ax_line.set_data(time_series, ax_series)
+    ay_line.set_data(time_series, ay_series)
+    az_line.set_data(time_series, az_series)
 
-# Extract x, y, z coordinates for plotting
-x_vals = [pos[0] for pos in positions]
-y_vals = [pos[1] for pos in positions]
-z_vals = [pos[2] for pos in positions]
+    ax.set_xlim(max(0, time_series[0]), time_series[-1] if time_series else 10)
+    return ax_line, ay_line, az_line
 
-# Plot the trajectory in 3D
-fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
-ax.plot(x_vals, y_vals, z_vals, marker='o')
-ax.set_xlabel('X Position')
-ax.set_ylabel('Y Position')
-ax.set_zlabel('Z Position')
-ax.set_title('Object Trajectory in 3D Space')
-plt.show()
+def start_plot(data_queue):
+    """Launches the Matplotlib real-time plot"""
+    global ax, ax_line, ay_line, az_line
+
+    fig, ax = plt.subplots()
+    ax.set_title("Real-time IMU Data")
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Acceleration")
+    ax.set_xlim(0, 10)
+    ax.set_ylim(-2000, 2000)
+
+    ax_line, = ax.plot([], [], label="Accel X", color="r")
+    ay_line, = ax.plot([], [], label="Accel Y", color="g")
+    az_line, = ax.plot([], [], label="Accel Z", color="b")
+
+    ax.legend()
+
+    loop = asyncio.get_event_loop()
+    loop.create_task(update_data(data_queue))  # Run update loop in background
+
+    ani = animation.FuncAnimation(fig, update_plot, interval=50)
+    plt.show()
