@@ -23,6 +23,9 @@ async def update_data(data_queue):
 
 def update_plot(frame):
     """Matplotlib animation update function"""
+    if not time_series:  # Handle empty deque case
+        return ax_line, ay_line, az_line  # Return unchanged artists
+    
     ax_line.set_data(time_series, ax_series)
     ay_line.set_data(time_series, ay_series)
     az_line.set_data(time_series, az_series)
@@ -33,6 +36,10 @@ def update_plot(frame):
 def start_plot(data_queue):
     """Launches the Matplotlib real-time plot"""
     global ax, ax_line, ay_line, az_line
+
+    # Create a new event loop for this thread
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
 
     fig, ax = plt.subplots()
     ax.set_title("Real-time IMU Data")
@@ -50,5 +57,6 @@ def start_plot(data_queue):
     loop = asyncio.get_event_loop()
     loop.create_task(update_data(data_queue))  # Run update loop in background
 
-    ani = animation.FuncAnimation(fig, update_plot, interval=50)
+    ani = animation.FuncAnimation(fig, update_plot, interval=50, cache_frame_data=False)
+
     plt.show()

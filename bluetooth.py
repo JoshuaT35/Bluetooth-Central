@@ -3,6 +3,7 @@ from bleak import BleakScanner, BleakClient
 from bleak.exc import BleakError
 import kinematics_calc as kmc
 from collections import deque
+import struct
 
 # IMU sensor UUIDs
 SERVICE_UUID = "19B10000-E8F2-537E-4F6C-D104768A1214"
@@ -37,19 +38,27 @@ async def ble_read_imu_data(client, dataQueue):
             # gx = await client.read_gatt_char(SWITCH_CHARACTERISTIC_GYRO_X_UUID)
             # gy = await client.read_gatt_char(SWITCH_CHARACTERISTIC_GYRO_Y_UUID)
             # gz = await client.read_gatt_char(SWITCH_CHARACTERISTIC_GYRO_Z_UUID)
-            time = await client.read_gatt_char(SWITCH_CHARACTERISTIC_TIME_UUID)
+            # time = await client.read_gatt_char(SWITCH_CHARACTERISTIC_TIME_UUID)
 
-            # convert from byte array to int (NOTE: should it be ints?)
-            ax = int.from_bytes(ax, byteorder='little', signed=True)
-            ay = int.from_bytes(ay, byteorder='little', signed=True)
-            az = int.from_bytes(az, byteorder='little', signed=True)
-            # gx = int.from_bytes(gx, byteorder='little', signed=True)
-            # gy = int.from_bytes(gy, byteorder='little', signed=True)
-            # gz = int.from_bytes(gz, byteorder='little', signed=True)
-            time = int.from_bytes(time, byteorder='little', signed=True)
+            # convert from byte array to int
+            # time = int.from_bytes(time, byteorder='little', signed=False)
+
+            # Convert from byte array to float (4 bytes per float)
+            ax = struct.unpack('f', ax)[0]
+            ay = struct.unpack('f', ay)[0]
+            az = struct.unpack('f', az)[0]
+
+            # debug: print data
+            # print(f"ax is {ax}, ")
+            # print(f"ay is {ay}, ")
+            # print(f"az is {az}, ")
+            # print(f"time is {time}, ")
 
             # Add timestamp
             timestamp = asyncio.get_event_loop().time()
+
+            print(f"time is {timestamp}, ")
+            print("\n")
 
             # Send data to queue
             await dataQueue.put((timestamp, ax, ay, az))
