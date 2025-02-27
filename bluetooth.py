@@ -24,7 +24,7 @@ ay_series = deque(maxlen=BUFFER_SIZE)
 az_series = deque(maxlen=BUFFER_SIZE)
 
 # Async queue for sharing data
-dataQueue = asyncio.Queue()
+# dataQueue = asyncio.Queue()
 
 
 async def ble_read_imu_data(client, dataQueue):
@@ -49,9 +49,9 @@ async def ble_read_imu_data(client, dataQueue):
             az = struct.unpack('f', az)[0]
 
             # debug: print data
-            # print(f"ax is {ax}, ")
-            # print(f"ay is {ay}, ")
-            # print(f"az is {az}, ")
+            print(f"ax is {ax}, ")
+            print(f"ay is {ay}, ")
+            print(f"az is {az}, ")
             # print(f"time is {time}, ")
 
             # Add timestamp
