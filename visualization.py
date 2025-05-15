@@ -9,18 +9,23 @@ async def plot_2d_data(ax, data_queue):
     timestamp = []
     first_time_unit = 0
 
-    # check if this is the first reading we get
+    # to check if this is the first reading we get
     initial_reading = True
+
+    # continuously retrieve data and plot it
     while True:
         # get data
         data = await data_queue.get()
         t, x, y, z = data
 
+        # mark the initial reading
         if initial_reading:
             initial_reading = False
             first_time_unit = t
         
         # Append the data to respective lists for plotting
+        # first time unit may not be 0.
+        # to set scale to begin at 0, we do current time (t) - previous time unit (first_time_unit)
         timestamp.append(t-first_time_unit)
         xdata.append(x)
         ydata.append(y)
@@ -51,7 +56,7 @@ async def plot_3d_data(axes, data_queue):
     prev_vel = []
     prev_pos = []
 
-        # data lists to store timestamps and x, y, z values
+    # data lists to store timestamps and x, y, z values
     # NOTE: use a queue or deque instead to avoid memory overflow?
     xdata, ydata, zdata = [], [], []
     timestamp = []
