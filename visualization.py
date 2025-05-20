@@ -1,5 +1,9 @@
 import matplotlib.pyplot as plt
+from collections import deque
 from kinematics_calc import get_current_position, get_current_vel
+
+# maximum number of data that should be plotted at a time
+MAX_NUM_DATA_PLOT = 100
 
 ## --- 2d plotting ---
 async def plot_2d_data(ax, data_queue):
@@ -60,7 +64,10 @@ async def plot_3d_data(axes, data_queue):
 
     # data lists to store timestamps and x, y, z values
     # NOTE: use a queue or deque instead to avoid memory overflow?
-    xdata, ydata, zdata = [], [], []
+    # xdata, ydata, zdata = [], [], []
+    xdata = deque(maxlen=MAX_NUM_DATA_PLOT)
+    ydata = deque(maxlen=MAX_NUM_DATA_PLOT)
+    zdata = deque(maxlen=MAX_NUM_DATA_PLOT)
 
     # check if this is the first reading we get
     initial_reading = True
@@ -87,10 +94,10 @@ async def plot_3d_data(axes, data_queue):
             # get the current velocity
             current_vel = get_current_vel([ax, ay, az], prev_vel, delta_time)
 
-            # append new position data to current position data
-            xdata.append(current_pos[0])
-            ydata.append(current_pos[1])
-            zdata.append(current_pos[2])
+        # append new position data to current position data
+        xdata.append(current_pos[0])
+        ydata.append(current_pos[1])
+        zdata.append(current_pos[2])
         
         # update prev variables to track new data
         prev_time = timestamp
@@ -99,6 +106,6 @@ async def plot_3d_data(axes, data_queue):
 
         # NOTE: since plt.show() is in main, the plotting code below MUST occur no matter what
         axes.clear()  # Clear previous data
-        axes.plot3D(xdata, ydata, zdata, 'gray')  # Plot the new data
+        axes.plot3D(list(xdata), list(ydata), list(zdata), 'gray')  # Plot the new data
         plt.draw()  # Redraw the plot
         plt.pause(0.05)  # Non-blocking pause to update the plot

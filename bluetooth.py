@@ -35,10 +35,10 @@ async def ble_read_imu_data(client, dataQueue):
             az = struct.unpack('f', az)[0]
 
             # debug: print data
-            print(f"ax is {ax}, ")
-            print(f"ay is {ay}, ")
-            print(f"az is {az}, ")
-            print(f"time is {time}, ")
+            # print(f"ax is {ax}, ")
+            # print(f"ay is {ay}, ")
+            # print(f"az is {az}, ")
+            # print(f"time is {time}, ")
 
             # send data to queue
             await dataQueue.put((time, ax, ay, az))
