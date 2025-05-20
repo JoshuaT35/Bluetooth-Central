@@ -1,30 +1,16 @@
 import asyncio
 from bleak import BleakScanner, BleakClient
-from bleak.exc import BleakError
-import kinematics_calc as kmc
-from collections import deque
 import struct
 
 # IMU sensor UUIDs
-SERVICE_UUID = "19B10000-E8F2-537E-4F6C-D104768A1214"
-SWITCH_CHARACTERISTIC_ACCEL_X_UUID = "19B10010-E8F2-537E-4F6C-D104768A1214"
-SWITCH_CHARACTERISTIC_ACCEL_Y_UUID = "19B10020-E8F2-537E-4F6C-D104768A1214"
-SWITCH_CHARACTERISTIC_ACCEL_Z_UUID = "19B10030-E8F2-537E-4F6C-D104768A1214"
-# SWITCH_CHARACTERISTIC_GYRO_X_UUID = "19B10040-E8F2-537E-4F6C-D104768A1214"
-# SWITCH_CHARACTERISTIC_GYRO_Y_UUID = "19B10050-E8F2-537E-4F6C-D104768A1214"
-# SWITCH_CHARACTERISTIC_GYRO_Z_UUID = "19B10060-E8F2-537E-4F6C-D104768A1214"
-SWITCH_CHARACTERISTIC_TIME_UUID = "19B10070-E8F2-537E-4F6C-D104768A1214"
-
-
-# Data storage (Fixed-length deque for real-time plotting)
-BUFFER_SIZE = 100  # Store last 100 data points
-time_series = deque(maxlen=BUFFER_SIZE)
-ax_series = deque(maxlen=BUFFER_SIZE)
-ay_series = deque(maxlen=BUFFER_SIZE)
-az_series = deque(maxlen=BUFFER_SIZE)
-
-# Async queue for sharing data
-# dataQueue = asyncio.Queue()
+SERVICE_UUID = "0b91a798-23b1-4369-9d45-a3a26d936904"
+SWITCH_CHARACTERISTIC_ACCEL_X_UUID = "026080c9-dc3a-401b-829c-2ee3b5565200"
+SWITCH_CHARACTERISTIC_ACCEL_Y_UUID = "e0a0b53e-5c53-4acf-bf79-39d2982362e9"
+SWITCH_CHARACTERISTIC_ACCEL_Z_UUID = "94b54966-faa7-48c1-9b53-7e44a9a872be"
+# SWITCH_CHARACTERISTIC_GYRO_X_UUID = "d30c8099-5b3e-4d4f-9c42-40b47a3f71ea"
+# SWITCH_CHARACTERISTIC_GYRO_Y_UUID = "734c0d37-c4fc-4265-953f-0aa24d28b1a5"
+# SWITCH_CHARACTERISTIC_GYRO_Z_UUID = "e51f3e60-3fdd-4591-9910-87362247c68d"
+SWITCH_CHARACTERISTIC_CURRENT_TIME_UUID = "72d913bb-e8df-44b8-b8ec-4f098978e0be"
 
 
 async def ble_read_imu_data(client, dataQueue):
@@ -38,10 +24,10 @@ async def ble_read_imu_data(client, dataQueue):
             # gx = await client.read_gatt_char(SWITCH_CHARACTERISTIC_GYRO_X_UUID)
             # gy = await client.read_gatt_char(SWITCH_CHARACTERISTIC_GYRO_Y_UUID)
             # gz = await client.read_gatt_char(SWITCH_CHARACTERISTIC_GYRO_Z_UUID)
-            # time = await client.read_gatt_char(SWITCH_CHARACTERISTIC_TIME_UUID)
+            time = await client.read_gatt_char(SWITCH_CHARACTERISTIC_CURRENT_TIME_UUID)
 
             # convert from byte array to int
-            # time = int.from_bytes(time, byteorder='little', signed=False)
+            time = int.from_bytes(time, byteorder='little', signed=False)
 
             # Convert from byte array to float (4 bytes per float)
             ax = struct.unpack('f', ax)[0]
@@ -52,18 +38,13 @@ async def ble_read_imu_data(client, dataQueue):
             print(f"ax is {ax}, ")
             print(f"ay is {ay}, ")
             print(f"az is {az}, ")
-            # print(f"time is {time}, ")
+            print(f"time is {time}, ")
 
-            # Add timestamp
-            timestamp = asyncio.get_event_loop().time()
+            # send data to queue
+            await dataQueue.put((time, ax, ay, az))
 
-            print(f"time is {timestamp}, ")
-            print("\n")
-
-            # Send data to queue
-            await dataQueue.put((timestamp, ax, ay, az))
-
-            await asyncio.sleep(0.05)  # Adjust as needed for your update rate
+            # pause data collection (might need to account for this in sensor readings)
+            await asyncio.sleep(0.05)
 
     except asyncio.CancelledError:
         print("Disconnecting...")
@@ -74,7 +55,7 @@ async def ble_read_imu_data(client, dataQueue):
 
 
 
-
+# async function that allows user to select sensor to bluetooth to
 async def ble_connect_imu(dataQueue):
     print("Scanning for devices...")
 
@@ -107,4 +88,6 @@ async def ble_connect_imu(dataQueue):
             return
 
         print(f"Connected to {selected_device.name}.")
+
+        #begin reading IMU data
         await ble_read_imu_data(client, dataQueue)

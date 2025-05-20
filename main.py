@@ -1,25 +1,27 @@
 import asyncio
-from bluetooth import ble_connect_imu
-from visualization import start_plot
+import matplotlib.pyplot as plt
 
-async def print_data(data_queue):
-    while True:
-        # Get data from the queue and print it
-        data = await data_queue.get()
-        print(f"Received data: {data}")
-        print("\n")
-        # You can put a condition to stop printing if needed, e.g., after certain number of data points.
-        data_queue.task_done()
+from bluetooth import ble_connect_imu
+from visualization import plot_2d_data
 
 async def main():
+    # figure and axis for 2D plot
+    fig, ax = plt.subplots()
+
+    # stores collected data
     data_queue = asyncio.Queue()
 
-    # Start BLE connection and data collection
+    # create BLE connection and data collection tasks
     ble_task = asyncio.create_task(ble_connect_imu(data_queue))
-    print_task = asyncio.create_task(print_data(data_queue))
-    
-    await ble_task  # Keeps the BLE connection alive
-    await print_task
+    plot_task = asyncio.create_task(plot_2d_data(ax, data_queue))
+
+    # main waits for these tasks to complete (which is ideally never)
+    await ble_task
+    await plot_task
+
+    # idk if this works, might be a replacement for the above awaits
+    # await asyncio.gather(ble_task, plot_task)
 
 if __name__ == "__main__":
     asyncio.run(main())
+    plt.show()

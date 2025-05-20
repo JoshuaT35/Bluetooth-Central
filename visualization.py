@@ -1,62 +1,113 @@
 import matplotlib.pyplot as plt
-import matplotlib.animation as animation
-from collections import deque
-import asyncio
+from kinematics_calc import get_current_position, get_current_vel
 
-# Data storage (Fixed-length deque)
-BUFFER_SIZE = 100
-time_series = deque(maxlen=BUFFER_SIZE)
-ax_series = deque(maxlen=BUFFER_SIZE)
-ay_series = deque(maxlen=BUFFER_SIZE)
-az_series = deque(maxlen=BUFFER_SIZE)
+## --- 2d plotting ---
+async def plot_2d_data(ax, data_queue):
+    # data lists to store timestamps and x, y, z values
+    # NOTE: use a queue or deque instead to avoid memory overflow?
+    xdata, ydata, zdata = [], [], []
+    timestamp = []
+    first_time_unit = 0
 
-async def update_data(data_queue):
-    """Fetches data from queue and updates the series"""
+    # to check if this is the first reading we get
+    initial_reading = True
+
+    # continuously retrieve data and plot it
     while True:
-        while not data_queue.empty():
-            timestamp, ax, ay, az = await data_queue.get()
-            time_series.append(timestamp)
-            ax_series.append(ax)
-            ay_series.append(ay)
-            az_series.append(az)
-        await asyncio.sleep(0.05)
+        # get data
+        data = await data_queue.get()
+        t, x, y, z = data
 
-def update_plot(frame):
-    """Matplotlib animation update function"""
-    if not time_series:  # Handle empty deque case
-        return ax_line, ay_line, az_line  # Return unchanged artists
-    
-    ax_line.set_data(time_series, ax_series)
-    ay_line.set_data(time_series, ay_series)
-    az_line.set_data(time_series, az_series)
+        # mark the initial reading
+        if initial_reading:
+            initial_reading = False
+            first_time_unit = t
+        
+        # Append the data to respective lists for plotting
+        # first time unit may not be 0.
+        # to set scale to begin at 0, we do current time (t) - previous time unit (first_time_unit)
+        timestamp.append(t-first_time_unit)
+        xdata.append(x)
+        ydata.append(y)
+        zdata.append(z)
+        
+        # Clear the plot to redraw it with the updated data
+        ax.clear()
+        
+        # Plot x, y, z values with respect to time (timestamp)
+        ax.plot(timestamp, xdata, label="X", color="r")
+        ax.plot(timestamp, ydata, label="Y", color="g")
+        ax.plot(timestamp, zdata, label="Z", color="b")
+        
+        ax.set_xlabel('Time (ms)')  # Label for x-axis
+        ax.set_ylabel('Values')  # Label for y-axis
+        ax.set_title('Real-Time Plot of x, y, z')  # Title of the plot
+        
+        ax.legend()  # Show legend
+        
+        plt.draw()  # Redraw the plot
+        plt.pause(0.05)  # Non-blocking pause to update the plot
 
-    ax.set_xlim(max(0, time_series[0]), time_series[-1] if time_series else 10)
-    return ax_line, ay_line, az_line
 
-def start_plot(data_queue):
-    """Launches the Matplotlib real-time plot"""
-    global ax, ax_line, ay_line, az_line
+# --- 3d plotting ---
+async def plot_3d_data(axes, data_queue):
+    # variables
+    prev_time = 0
+    prev_vel = []
+    prev_pos = []
+    current_vel = []
+    current_pos = []
 
-    # Create a new event loop for this thread
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    # data lists to store timestamps and x, y, z values
+    # NOTE: use a queue or deque instead to avoid memory overflow?
+    xdata, ydata, zdata = [], [], []
+    timestamp = []
 
-    fig, ax = plt.subplots()
-    ax.set_title("Real-time IMU Data")
-    ax.set_xlabel("Time (s)")
-    ax.set_ylabel("Acceleration")
-    ax.set_xlim(0, 10)
-    ax.set_ylim(-2000, 2000)
+    # check if this is the first reading we get
+    initial_reading = True
 
-    ax_line, = ax.plot([], [], label="Accel X", color="r")
-    ay_line, = ax.plot([], [], label="Accel Y", color="g")
-    az_line, = ax.plot([], [], label="Accel Z", color="b")
+    while True:
+        # get data
+        data = await data_queue.get()
+        timestamp, ax, ay, az = data
 
-    ax.legend()
+        # if initial reading, store the values but do no calculations (we have nothing over time to compare with)
+        if initial_reading:
+            initial_reading = False
+            prev_time = timestamp
+            prev_vel = [0, 0, 0]    # velocity for x, y, z is 0 (assumption: sensor not currently moving at the beginning)
+            prev_pos = [0, 0, 0]    # position for x, y, z is 0 (assumption: origin)
 
-    loop = asyncio.get_event_loop()
-    loop.create_task(update_data(data_queue))  # Run update loop in background
+        # secondary and more data points obtained
+        else:
+            # get difference in time
+            delta_time = timestamp - prev_time
+            # update prev time to track current time
+            prev_time = timestamp
 
-    ani = animation.FuncAnimation(fig, update_plot, interval=50, cache_frame_data=False)
+            # get the current velocity
+            current_vel = get_current_vel([ax, ay, az], prev_vel, delta_time)
 
-    plt.show()
+            # set the current position based on acceleration, previous velocity, previous position, and time between
+            # prev_pos = get_current_position([ax, ay, az], prev_vel, prev_pos, delta_time)
+            current_pos = get_current_position([ax, ay, az], current_vel, prev_pos, delta_time)
+
+            # append new data to current data
+            xdata.append(current_pos[0])
+            ydata.append(current_pos[1])
+            zdata.append(current_pos[2])
+        
+        # we have obtained relevant data. Now, variables tracking previous data are updated with current data
+        prev_vel = current_vel
+        prev_pos = current_pos
+
+        # append data to the queue (note: since plt.show() is in main, the plotting code below MUST occur no matter what)
+        xdata.append(ax)
+        ydata.append(ay)
+        zdata.append(az)
+
+        print("hit!")
+        axes.clear()  # Clear previous data
+        axes.plot3D(xdata, ydata, zdata, 'gray')  # Plot the new data
+        plt.draw()  # Redraw the plot
+        plt.pause(0.05)  # Non-blocking pause to update the plot
