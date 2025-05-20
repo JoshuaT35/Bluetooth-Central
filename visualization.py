@@ -55,13 +55,12 @@ async def plot_3d_data(axes, data_queue):
     prev_time = 0
     prev_vel = []
     prev_pos = []
-    current_vel = []
-    current_pos = []
+    current_vel = [0, 0, 0] # initial velocity for x, y, z is 0 (assumption: sensor not currently moving at the beginning)
+    current_pos = [0, 0, 0] # initial position for x, y, z is 0 (assumption: position of origin)
 
     # data lists to store timestamps and x, y, z values
     # NOTE: use a queue or deque instead to avoid memory overflow?
     xdata, ydata, zdata = [], [], []
-    timestamp = []
 
     # check if this is the first reading we get
     initial_reading = True
@@ -71,42 +70,34 @@ async def plot_3d_data(axes, data_queue):
         data = await data_queue.get()
         timestamp, ax, ay, az = data
 
-        # if initial reading, store the values but do no calculations (we have nothing over time to compare with)
+        # if initial reading, do no calculations (we have nothing over time to compare with)
         if initial_reading:
             initial_reading = False
-            prev_time = timestamp
-            prev_vel = [0, 0, 0]    # velocity for x, y, z is 0 (assumption: sensor not currently moving at the beginning)
-            prev_pos = [0, 0, 0]    # position for x, y, z is 0 (assumption: origin)
 
         # secondary and more data points obtained
         else:
             # get difference in time
             delta_time = timestamp - prev_time
-            # update prev time to track current time
-            prev_time = timestamp
 
+            # get the current position based on acceleration, previous velocity, previous position, and time between
+            current_pos = get_current_position([ax, ay, az], prev_vel, prev_pos, delta_time)
+
+            # NOTE: current_vel is actually only used to update prev_vel.
+            # so theoretically we can just remove current_vel and have prev_vel run the function
             # get the current velocity
             current_vel = get_current_vel([ax, ay, az], prev_vel, delta_time)
 
-            # set the current position based on acceleration, previous velocity, previous position, and time between
-            # prev_pos = get_current_position([ax, ay, az], prev_vel, prev_pos, delta_time)
-            current_pos = get_current_position([ax, ay, az], current_vel, prev_pos, delta_time)
-
-            # append new data to current data
+            # append new position data to current position data
             xdata.append(current_pos[0])
             ydata.append(current_pos[1])
             zdata.append(current_pos[2])
         
-        # we have obtained relevant data. Now, variables tracking previous data are updated with current data
+        # update prev variables to track new data
+        prev_time = timestamp
         prev_vel = current_vel
         prev_pos = current_pos
 
-        # append data to the queue (note: since plt.show() is in main, the plotting code below MUST occur no matter what)
-        xdata.append(ax)
-        ydata.append(ay)
-        zdata.append(az)
-
-        print("hit!")
+        # NOTE: since plt.show() is in main, the plotting code below MUST occur no matter what
         axes.clear()  # Clear previous data
         axes.plot3D(xdata, ydata, zdata, 'gray')  # Plot the new data
         plt.draw()  # Redraw the plot

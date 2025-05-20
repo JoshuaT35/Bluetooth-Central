@@ -8,15 +8,15 @@ Given:
 - The time between the previous and current reading in (s)
 
 Return:
-    - the displacement as [sx, sy, sz] in (m)
+    - the final (current) velocity as [vx, vy, vz] in (m)
 '''
-def get_displacement(current_accel, prev_vel, delta_time):
-    # using s = ut + 1/2(a)(t^2)
-    displacement_x = prev_vel[0]*delta_time + 0.5*(current_accel[0])*(delta_time**2)
-    displacement_y = prev_vel[1]*delta_time + 0.5*(current_accel[1])*(delta_time**2)
-    displacement_z = prev_vel[2]*delta_time + 0.5*(current_accel[2])*(delta_time**2)
+def get_current_vel(current_accel, prev_vel, delta_time):
+    # using v_f = v_i + at
+    current_vel_x = prev_vel[0] + current_accel[0]*delta_time
+    current_vel_y = prev_vel[1] + current_accel[1]*delta_time
+    current_vel_z = prev_vel[2] + current_accel[2]*delta_time
 
-    return list(displacement_x, displacement_y, displacement_z)
+    return list(current_vel_x, current_vel_y, current_vel_z)
 
 '''
 Given:
@@ -25,15 +25,15 @@ Given:
 - The time between the previous and current reading in (s)
 
 Return:
-    - the final (current) velocity as [vx, vy, vz] in (m)
+    - the displacement as [sx, sy, sz] in (m)
 '''
-def get_current_vel(current_accel, prev_vel, delta_time):
-    # using v = u + at
-    current_vel_x = prev_vel[0] + current_accel[0]*delta_time
-    current_vel_y = prev_vel[1] + current_accel[1]*delta_time
-    current_vel_z = prev_vel[2] + current_accel[2]*delta_time
+def get_displacement(current_accel, prev_vel, delta_time):
+    # using s = v_i*t + 1/2(a)(t^2)
+    displacement_x = prev_vel[0]*delta_time + 0.5*(current_accel[0])*(delta_time**2)
+    displacement_y = prev_vel[1]*delta_time + 0.5*(current_accel[1])*(delta_time**2)
+    displacement_z = prev_vel[2]*delta_time + 0.5*(current_accel[2])*(delta_time**2)
 
-    return list(current_vel_x, current_vel_y, current_vel_z)
+    return list(displacement_x, displacement_y, displacement_z)
 
 '''
 Given:
