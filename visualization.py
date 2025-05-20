@@ -55,6 +55,8 @@ async def plot_3d_data(axes, data_queue):
     prev_time = 0
     prev_vel = []
     prev_pos = []
+    current_vel = []
+    current_pos = []
 
     # data lists to store timestamps and x, y, z values
     # NOTE: use a queue or deque instead to avoid memory overflow?
@@ -78,18 +80,26 @@ async def plot_3d_data(axes, data_queue):
 
         # secondary and more data points obtained
         else:
-            # get difference in time and update prev time to track current time
+            # get difference in time
             delta_time = timestamp - prev_time
+            # update prev time to track current time
             prev_time = timestamp
 
-            # get the current position and velocity
-            prev_pos = get_current_position([ax, ay, az], prev_vel, prev_pos, delta_time)
-            prev_vel = get_current_vel([ax, ay, az], prev_vel, delta_time)
+            # get the current velocity
+            current_vel = get_current_vel([ax, ay, az], prev_vel, delta_time)
+
+            # set the current position based on acceleration, previous velocity, previous position, and time between
+            # prev_pos = get_current_position([ax, ay, az], prev_vel, prev_pos, delta_time)
+            current_pos = get_current_position([ax, ay, az], current_vel, prev_pos, delta_time)
 
             # append new data to current data
-            xdata.append(prev_pos[0])
-            ydata.append(prev_pos[1])
-            zdata.append(prev_pos[2])
+            xdata.append(current_pos[0])
+            ydata.append(current_pos[1])
+            zdata.append(current_pos[2])
+        
+        # we have obtained relevant data. Now, variables tracking previous data are updated with current data
+        prev_vel = current_vel
+        prev_pos = current_pos
 
         # append data to the queue (note: since plt.show() is in main, the plotting code below MUST occur no matter what)
         xdata.append(ax)
