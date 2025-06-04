@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-from collections import deque
+import collections
 from kinematics_calc import get_current_position, get_current_vel
 
 # maximum number of data that should be plotted at a time
@@ -63,11 +63,9 @@ async def plot_3d_data(axes, data_queue):
     current_pos = [0, 0, 0] # initial position for x, y, z is 0 (assumption: position of origin)
 
     # data lists to store timestamps and x, y, z values
-    # NOTE: use a queue or deque instead to avoid memory overflow?
-    # xdata, ydata, zdata = [], [], []
-    xdata = deque(maxlen=MAX_NUM_DATA_PLOT)
-    ydata = deque(maxlen=MAX_NUM_DATA_PLOT)
-    zdata = deque(maxlen=MAX_NUM_DATA_PLOT)
+    xdata = collections.deque(maxlen=MAX_NUM_DATA_PLOT)
+    ydata = collections.deque(maxlen=MAX_NUM_DATA_PLOT)
+    zdata = collections.deque(maxlen=MAX_NUM_DATA_PLOT)
 
     # check if this is the first reading we get
     initial_reading = True
@@ -90,8 +88,7 @@ async def plot_3d_data(axes, data_queue):
             current_pos = get_current_position([ax, ay, az], prev_vel, prev_pos, delta_time)
 
             # NOTE: current_vel is actually only used to update prev_vel.
-            # so theoretically we can just remove current_vel and have prev_vel run the function
-            # get the current velocity
+            # so theoretically we can just assign this value to prev_vel directly
             current_vel = get_current_vel([ax, ay, az], prev_vel, delta_time)
 
         # append new position data to current position data
