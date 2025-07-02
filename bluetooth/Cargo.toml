@@ -1,0 +1,15 @@
+[package]
+name = "bluetooth"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "bluetooth"
+crate-type = ["cdylib"]
+
+[dependencies]
+bluest = "0.6.8"
+futures-util = "0.3.31"
+pyo3 = "0.25.1"
+tokio = { version = "1.45.1", features = ["full"] }
