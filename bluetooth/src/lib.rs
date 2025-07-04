@@ -61,13 +61,19 @@ async fn run_ble_stream(callback: PyObject) -> Result<(), Box<dyn std::error::Er
     let service_uuid = Uuid::parse_str(SERVICE_UUID_STR)?;
     let services = &[service_uuid];
     let mut scan = adapter.scan(services).await?;
+
+    // give time for adapter to scan
     sleep(Duration::from_secs(5)).await;
 
+    // store devices
     let mut devices = Vec::new();
+
+    // NOTE: does not normally break out of while loop, so manual break (dirty and inefficient)
     while let Some(result) = scan.next().await {
         let name = result.device.name().unwrap_or("(unknown)".to_string());
         println!("{}: {} (RSSI: {:?})", devices.len(), name, result.rssi);
         devices.push(result.device);
+        break;
     }
 
     if devices.is_empty() {
@@ -99,32 +105,44 @@ async fn run_ble_stream(callback: PyObject) -> Result<(), Box<dyn std::error::Er
     loop {
         tokio::select! {
             _ = &mut shutdown_signal => break,
-            _ = async {
-                let ax: f32 = read_ble_f32_characteristic(selected_device, SWITCH_CHARACTERISTIC_ACCEL_X_UUID_STR).await?;
-                let ay: f32 = read_ble_f32_characteristic(selected_device, SWITCH_CHARACTERISTIC_ACCEL_Y_UUID_STR).await?;
-                let az: f32 = read_ble_f32_characteristic(selected_device, SWITCH_CHARACTERISTIC_ACCEL_Z_UUID_STR).await?;
-                let time: u64 = read_ble_u64_characteristic(selected_device, SWITCH_CHARACTERISTIC_CURRENT_TIME_UUID_STR).await?;
+            result = async {
+                let ax = read_ble_f32_characteristic(selected_device, SWITCH_CHARACTERISTIC_ACCEL_X_UUID_STR).await?;
+                let ay = read_ble_f32_characteristic(selected_device, SWITCH_CHARACTERISTIC_ACCEL_Y_UUID_STR).await?;
+                let az = read_ble_f32_characteristic(selected_device, SWITCH_CHARACTERISTIC_ACCEL_Z_UUID_STR).await?;
+                let time = read_ble_u64_characteristic(selected_device, SWITCH_CHARACTERISTIC_CURRENT_TIME_UUID_STR).await?;
+            
+                Ok::<_, Box<dyn std::error::Error>>((ax, ay, az, time))
+            } => {
+                match result {
+                    Ok((ax, ay, az, time)) => {
+                        // debug: print data
+                        println!("Read data: ax={} ay={} az={} time={}", ax, ay, az, time);
 
-                // Call Python callback with values
-                // NOTE: error handling?
-                let _ = Python::with_gil(|py| -> PyResult<()> {
-                    let args = PyTuple::new(
-                        py,
-                        &[
-                            PyFloat::new(py, ax as f64),  // Convert f32 → Python float (f64)
-                            PyFloat::new(py, ay as f64),
-                            PyFloat::new(py, az as f64),
-                            PyFloat::new(py, time as f64),
-                        ],
-                    ).unwrap();
-                    callback.call1(py, &args)?;  // Pass the bound tuple
-                    Ok(())
-                });
+                        // Call Python callback with values
+                        let _ = Python::with_gil(|py| -> PyResult<()> {
+                            let args = PyTuple::new(
+                                py,
+                                &[
+                                    PyFloat::new(py, ax as f64),  // Convert f32 → Python float (f64)
+                                    PyFloat::new(py, ay as f64),
+                                    PyFloat::new(py, az as f64),
+                                    PyFloat::new(py, time as f64),
+                                ],
+                            ).unwrap();
+                            callback.call1(py, &args)?;  // Pass the bound tuple
+                            Ok(())
+                        });
 
-                sleep(Duration::from_millis(500)).await;
+                        sleep(Duration::from_millis(500)).await;
 
-                Ok::<_, Box<dyn std::error::Error>>(())
-            } => {}
+                        // Ok::<_, Box<dyn std::error::Error>>(())
+                    },
+                    Err(e) => {
+                        eprintln!("Error during read loop: {}", e);
+                        break;
+                    }
+                }
+            }
         }
     }
 
@@ -150,6 +168,8 @@ async fn read_ble_f32_characteristic(device: &Device, uuid_str: &str) -> Result<
                 }
                 return Ok(f32::from_le_bytes(raw[..4].try_into()?));
             }
+            else {
+            }
         }
     }
 
@@ -168,10 +188,16 @@ async fn read_ble_u64_characteristic(device: &Device, uuid_str: &str) -> Result<
                     return Err("Characteristic is not readable".into());
                 }
                 let raw = characteristic.read().await?;
-                if raw.len() != 8 {
-                    return Err("Expected 8 bytes for u64".into());
+                match raw.len() {
+                    4 => {
+                        let val = u32::from_le_bytes(raw[..4].try_into()?);
+                        return Ok(val as u64);
+                    }
+                    8 => {
+                        return Ok(u64::from_le_bytes(raw[..8].try_into()?));
+                    }
+                    _ => return Err(format!("Unexpected byte length for u64: {}", raw.len()).into()),
                 }
-                return Ok(u64::from_le_bytes(raw[..8].try_into()?));
             }
         }
     }

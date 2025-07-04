@@ -1,9 +1,0 @@
-[package]
-name = "rust-bluetooth"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-bluest = "0.6.8"
-futures-util = "0.3.31"
-tokio = { version = "1.45.1", features = ["full"] }
