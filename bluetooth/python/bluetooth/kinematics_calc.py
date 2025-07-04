@@ -16,7 +16,7 @@ def get_current_vel(current_accel, prev_vel, delta_time):
     current_vel_y = prev_vel[1] + current_accel[1]*delta_time
     current_vel_z = prev_vel[2] + current_accel[2]*delta_time
 
-    return list(current_vel_x, current_vel_y, current_vel_z)
+    return [current_vel_x, current_vel_y, current_vel_z]
 
 '''
 Given:
@@ -33,7 +33,7 @@ def get_displacement(current_accel, prev_vel, delta_time):
     displacement_y = prev_vel[1]*delta_time + 0.5*(current_accel[1])*(delta_time**2)
     displacement_z = prev_vel[2]*delta_time + 0.5*(current_accel[2])*(delta_time**2)
 
-    return list(displacement_x, displacement_y, displacement_z)
+    return [displacement_x, displacement_y, displacement_z]
 
 '''
 Given:
@@ -54,4 +54,4 @@ def get_current_position(current_accel, prev_vel, prev_position, delta_time):
     current_pos_y = prev_position[1] + displacement[1]
     current_pos_z = prev_position[2] + displacement[2]
 
-    return list(current_pos_x, current_pos_y, current_pos_z)
+    return [current_pos_x, current_pos_y, current_pos_z]

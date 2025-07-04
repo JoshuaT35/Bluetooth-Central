@@ -1,12 +1,17 @@
 import asyncio
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 from bluetooth import start_ble_stream
-from visualization import plot_2d_data
+from visualization import plot_3d_data
 
 async def main():
     # figure and axis for 2D plot
-    fig, ax = plt.subplots()
+    # fig, ax = plt.subplots()
+
+    # Create 3D plot
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
 
     # stores collected data
     data_queue = asyncio.Queue()
@@ -27,7 +32,7 @@ async def main():
 
     # create BLE connection and data collection tasks
     # ble_task = asyncio.create_task(start_ble_stream(data_queue))
-    plot_task = asyncio.create_task(plot_2d_data(ax, data_queue))
+    plot_task = asyncio.create_task(plot_3d_data(ax, data_queue))
 
     # main waits for these tasks to complete (which is ideally never)
     # await ble_task

@@ -73,7 +73,7 @@ async def plot_3d_data(axes, data_queue):
     while True:
         # get data
         data = await data_queue.get()
-        timestamp, ax, ay, az = data
+        ax, ay, az, timestamp = data
 
         # if initial reading, do no calculations (we have nothing over time to compare with)
         if initial_reading:
