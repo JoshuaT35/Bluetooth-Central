@@ -20,7 +20,7 @@ async def plot_2d_data(ax, data_queue):
     while True:
         # get data
         data = await data_queue.get()
-        t, x, y, z = data
+        x, y, z, t = data
 
         # mark the initial reading
         if initial_reading:

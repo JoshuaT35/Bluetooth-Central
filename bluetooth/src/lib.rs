@@ -116,7 +116,7 @@ async fn run_ble_stream(callback: PyObject) -> Result<(), Box<dyn std::error::Er
                 match result {
                     Ok((ax, ay, az, time)) => {
                         // debug: print data
-                        println!("Read data: ax={} ay={} az={} time={}", ax, ay, az, time);
+                        // println!("Read data: ax={} ay={} az={} time={}", ax, ay, az, time);
 
                         // Call Python callback with values
                         let _ = Python::with_gil(|py| -> PyResult<()> {
