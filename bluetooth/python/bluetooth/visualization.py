@@ -57,8 +57,8 @@ async def plot_2d_data(ax, data_queue):
 async def plot_3d_data(axes, data_queue):
     # variables
     prev_time = 0
-    prev_vel = []
-    prev_pos = []
+    prev_vel = [0, 0, 0]
+    prev_pos = [0, 0, 0]
     current_vel = [0, 0, 0] # initial velocity for x, y, z is 0 (assumption: sensor not currently moving at the beginning)
     current_pos = [0, 0, 0] # initial position for x, y, z is 0 (assumption: position of origin)
 
