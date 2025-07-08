@@ -1,4 +1,4 @@
--e git+ssh://git@github.com/JoshuaT35/Bluetooth-Central.git@ff7c59ec0225ba659caa1a45c08c775479de4587#egg=bluetooth&subdirectory=bluetooth
+-e git+ssh://git@github.com/JoshuaT35/Bluetooth-Central.git@ea26d67dc4f35db79915a19248d4567c4beebd79#egg=bluetooth_connect&subdirectory=bluetooth_connect
 contourpy==1.3.2
 cycler==0.12.1
 dbus-fast==2.44.1
