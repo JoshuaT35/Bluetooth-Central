@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import collections
-from kinematics_calc import get_current_position, get_current_vel
+from calculations.kinematics import get_current_position, get_current_vel
 
 # maximum number of data that should be plotted at a time
 MAX_NUM_DATA_PLOT = 100

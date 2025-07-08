@@ -30,7 +30,7 @@ const SWITCH_CHARACTERISTIC_CURRENT_TIME_UUID_STR: &str = "72d913bb-e8df-44b8-b8
 
 // Expose the module to Python
 #[pymodule]
-fn bluetooth(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn bluetooth_connect(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(start_ble_stream, m)?)?;
     Ok(())
 }
