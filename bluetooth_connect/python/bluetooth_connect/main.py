@@ -2,7 +2,8 @@ import asyncio
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-from bluetooth_connect import start_ble_stream
+# from bluetooth import start_ble_stream
+from bluetooth import start_ble_stream
 
 from visualization.visuals import plot_3d_data
 
