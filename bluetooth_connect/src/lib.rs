@@ -30,10 +30,40 @@ const SWITCH_CHARACTERISTIC_CURRENT_TIME_UUID_STR: &str = "72d913bb-e8df-44b8-b8
 
 // Expose the module to Python
 #[pymodule]
-fn bluetooth_connect(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn bluetooth(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // m.add_function(wrap_pyfunction!(scan_devices, m)?)?;
     m.add_function(wrap_pyfunction!(start_ble_stream, m)?)?;
     Ok(())
 }
+
+// #[pyfunction]
+// fn scan_devices() -> PyResult<Vec<(String, String)>> {
+//     let rt = tokio::runtime::Runtime::new().map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to create runtime: {}", e)))?;
+    
+//     rt.block_on(async {
+//         let adapter = Adapter::default()
+//             .await
+//             .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("Bluetooth adapter not found"))?;
+//         adapter.wait_available().await.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Adapter error: {:?}", e)))?;
+
+//         println!("Scanning for BLE devices...");
+//         let mut scan = adapter.scan(&[]).await.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Scan error: {:?}", e)))?;
+
+//         // Collect devices for 5 seconds
+//         let mut devices = Vec::new();
+//         let scan_duration = std::time::Duration::from_secs(5);
+//         let scan_end = tokio::time::Instant::now() + scan_duration;
+
+//         while let Some(result) = tokio::time::timeout_at(scan_end, scan.next()).await.unwrap_or(None) {
+//             let name = result.device.name().unwrap_or_else(|_| "(unknown)".to_string());
+//             let id = result.device.id().to_string();
+//             devices.push((name, id));
+//         }
+
+//         Ok(devices)
+//     })
+// }
+
 
 // Python-callable function that runs BLE code in a background task
 #[pyfunction]
@@ -50,6 +80,7 @@ fn start_ble_stream(py_callback: PyObject) -> PyResult<()> {
     Ok(())
 }
 
+
 /// Async function to scan, connect, read, and stream IMU data
 async fn run_ble_stream(callback: PyObject) -> Result<(), Box<dyn std::error::Error>> {
     let adapter = Adapter::default()
@@ -57,7 +88,7 @@ async fn run_ble_stream(callback: PyObject) -> Result<(), Box<dyn std::error::Er
         .ok_or("Bluetooth adapter not found")?;
     adapter.wait_available().await?;
 
-    println!("Scanning for BLE devices...");
+    println!("Scanning for BLE devices with service ID {}...", SERVICE_UUID_STR);
     let service_uuid = Uuid::parse_str(SERVICE_UUID_STR)?;
     let services = &[service_uuid];
     let mut scan = adapter.scan(services).await?;
@@ -65,36 +96,19 @@ async fn run_ble_stream(callback: PyObject) -> Result<(), Box<dyn std::error::Er
     // give time for adapter to scan
     sleep(Duration::from_secs(5)).await;
 
-    // store devices
-    let mut devices = Vec::new();
-
     // NOTE: does not normally break out of while loop, so manual break (dirty and inefficient)
-    while let Some(result) = scan.next().await {
-        let name = result.device.name().unwrap_or("(unknown)".to_string());
-        println!("{}: {} (RSSI: {:?})", devices.len(), name, result.rssi);
-        devices.push(result.device);
-        break;
-    }
+    // while let Some(result) = scan.next().await {
+    //     let name = result.device.name().unwrap_or("(unknown)".to_string());
+    //     println!("{}: {} (RSSI: {:?})", devices.len(), name, result.rssi);
+    //     devices.push(result.device);
+    //     break;
+    // }
 
-    if devices.is_empty() {
-        println!("No devices found.");
-        return Ok(());
-    }
+    // get the next device
+    let discovered_device = scan.next().await.ok_or("No matching device found")?;
 
-    print!("\nEnter device number to connect: ");
-    io::stdout().flush()?;
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
-    let index: usize = input.trim().parse()?;
-
-    if index >= devices.len() {
-        println!("Invalid index.");
-        return Ok(());
-    }
-
-    let selected_device = &devices[index];
-    println!("Connecting to device {}...", index);
-    adapter.connect_device(selected_device).await?;
+    // note: connect to first device instead
+    adapter.connect_device(&discovered_device.device).await?;
     println!("Connected!");
 
     let mut shutdown_signal = tokio::spawn(async {
@@ -106,10 +120,10 @@ async fn run_ble_stream(callback: PyObject) -> Result<(), Box<dyn std::error::Er
         tokio::select! {
             _ = &mut shutdown_signal => break,
             result = async {
-                let ax = read_ble_f32_characteristic(selected_device, SWITCH_CHARACTERISTIC_ACCEL_X_UUID_STR).await?;
-                let ay = read_ble_f32_characteristic(selected_device, SWITCH_CHARACTERISTIC_ACCEL_Y_UUID_STR).await?;
-                let az = read_ble_f32_characteristic(selected_device, SWITCH_CHARACTERISTIC_ACCEL_Z_UUID_STR).await?;
-                let time = read_ble_u64_characteristic(selected_device, SWITCH_CHARACTERISTIC_CURRENT_TIME_UUID_STR).await?;
+                let ax = read_ble_f32_characteristic(&discovered_device.device, SWITCH_CHARACTERISTIC_ACCEL_X_UUID_STR).await?;
+                let ay = read_ble_f32_characteristic(&discovered_device.device, SWITCH_CHARACTERISTIC_ACCEL_Y_UUID_STR).await?;
+                let az = read_ble_f32_characteristic(&discovered_device.device, SWITCH_CHARACTERISTIC_ACCEL_Z_UUID_STR).await?;
+                let time = read_ble_u64_characteristic(&discovered_device.device, SWITCH_CHARACTERISTIC_CURRENT_TIME_UUID_STR).await?;
             
                 Ok::<_, Box<dyn std::error::Error>>((ax, ay, az, time))
             } => {
@@ -146,7 +160,7 @@ async fn run_ble_stream(callback: PyObject) -> Result<(), Box<dyn std::error::Er
         }
     }
 
-    adapter.disconnect_device(selected_device).await?;
+    adapter.disconnect_device(&discovered_device.device).await?;
     println!("Disconnected.");
     Ok(())
 }

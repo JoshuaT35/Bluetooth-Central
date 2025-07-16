@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import collections
-from calculations.kinematics import get_current_position, get_current_vel
+from calculation.kinematics import get_current_position, get_current_vel
 
 # maximum number of data that should be plotted at a time
 MAX_NUM_DATA_PLOT = 100
@@ -75,14 +75,15 @@ async def plot_3d_data(axes, data_queue):
         data = await data_queue.get()
         ax, ay, az, timestamp = data
 
+
         # if initial reading, do no calculations (we have nothing over time to compare with)
         if initial_reading:
             initial_reading = False
 
         # secondary and more data points obtained
         else:
-            # get difference in time
-            delta_time = timestamp - prev_time
+            # get difference in time (plus convert from microseconds to seconds)
+            delta_time = (timestamp - prev_time)/1000
 
             # get the current position based on acceleration, previous velocity, previous position, and time between
             current_pos = get_current_position([ax, ay, az], prev_vel, prev_pos, delta_time)
@@ -95,6 +96,8 @@ async def plot_3d_data(axes, data_queue):
         xdata.append(current_pos[0])
         ydata.append(current_pos[1])
         zdata.append(current_pos[2])
+
+        # print("position is ", current_pos[0], " ", current_pos[1], " ", current_pos[2])
         
         # update prev variables to track new data
         prev_time = timestamp
