@@ -1,6 +1,7 @@
-import asyncio
-import sys
-sys.coinit_flags = 0
+# -------------------------------------------
+# Uncomment code if on Windows:
+# import sys
+# sys.coinit_flags = 0
 
 # # Try to undo STA initialization if it happened
 # try:
@@ -15,7 +16,10 @@ sys.coinit_flags = 0
 
 # if sys.platform.startswith("win"):
 #     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+# -------------------------------------------
 
+
+import asyncio
 from bleak import BleakScanner, BleakClient
 import struct
 

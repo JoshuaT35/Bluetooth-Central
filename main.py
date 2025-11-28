@@ -1,17 +1,22 @@
+# -------------------------------------------
+# Uncomment code if on Windows:
+# import sys
+# sys.coinit_flags = 0  # 0 means MTA
+
+# # Try to undo STA initialization if it happened
+# try:
+#     from bleak.backends.winrt.util import allow_sta
+#     # tell Bleak we are using a graphical user interface that has been properly
+#     # configured to work with asyncio
+#     allow_sta()
+# except ImportError:
+#     # other OSes and older versions of Bleak will raise ImportError which we
+#     # can safely ignore
+#     pass
+# -------------------------------------------
+
+
 import asyncio
-import sys
-sys.coinit_flags = 0  # 0 means MTA
-
-try:
-    from bleak.backends.winrt.util import allow_sta
-    # tell Bleak we are using a graphical user interface that has been properly
-    # configured to work with asyncio
-    allow_sta()
-except ImportError:
-    # other OSes and older versions of Bleak will raise ImportError which we
-    # can safely ignore
-    pass
-
 import matplotlib.pyplot as plt
 
 from bluetooth import ble_connect_imu
