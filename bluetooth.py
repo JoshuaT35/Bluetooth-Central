@@ -19,99 +19,160 @@
 # -------------------------------------------
 
 
-import asyncio
+import asyncio, struct
+from PySide6.QtCore import QObject, Signal
 from bleak import BleakScanner, BleakClient
-import struct
 
-# IMU sensor UUIDs
-SERVICE_UUID = "0b91a798-23b1-4369-9d45-a3a26d936904"
-SWITCH_CHARACTERISTIC_ACCEL_X_UUID = "026080c9-dc3a-401b-829c-2ee3b5565200"
-SWITCH_CHARACTERISTIC_ACCEL_Y_UUID = "e0a0b53e-5c53-4acf-bf79-39d2982362e9"
-SWITCH_CHARACTERISTIC_ACCEL_Z_UUID = "94b54966-faa7-48c1-9b53-7e44a9a872be"
-SWITCH_CHARACTERISTIC_GYRO_X_UUID = "d30c8099-5b3e-4d4f-9c42-40b47a3f71ea"
-SWITCH_CHARACTERISTIC_GYRO_Y_UUID = "734c0d37-c4fc-4265-953f-0aa24d28b1a5"
-SWITCH_CHARACTERISTIC_GYRO_Z_UUID = "e51f3e60-3fdd-4591-9910-87362247c68d"
-SWITCH_CHARACTERISTIC_CURRENT_TIME_UUID = "72d913bb-e8df-44b8-b8ec-4f098978e0be"
+class BLEImuManager(QObject):
+    status = Signal(str)
+
+    def __init__(self):
+        super().__init__()
+        self.client = None
+        self.is_connected = False
+        self.read_task = None
 
 
-async def ble_read_imu_data(client, dataQueue):
-    """Continuously read data from BLE and push to queue"""
-    try:
-        while True:
-            # get raw byte data
-            ax = await client.read_gatt_char(SWITCH_CHARACTERISTIC_ACCEL_X_UUID)
-            ay = await client.read_gatt_char(SWITCH_CHARACTERISTIC_ACCEL_Y_UUID)
-            az = await client.read_gatt_char(SWITCH_CHARACTERISTIC_ACCEL_Z_UUID)
-            gx = await client.read_gatt_char(SWITCH_CHARACTERISTIC_GYRO_X_UUID)
-            gy = await client.read_gatt_char(SWITCH_CHARACTERISTIC_GYRO_Y_UUID)
-            gz = await client.read_gatt_char(SWITCH_CHARACTERISTIC_GYRO_Z_UUID)
-            time = await client.read_gatt_char(SWITCH_CHARACTERISTIC_CURRENT_TIME_UUID)
+    # ------------------------------------------------------
+    # Scan for BLE devices
+    # ------------------------------------------------------
+    async def scan_devices(self, service_uuid):
+        self.status.emit("Scanning for IMU devices...")
 
-            # convert from byte array to int
-            time = int.from_bytes(time, byteorder='little', signed=False)
+        devices = await BleakScanner.discover(
+            service_uuids=[service_uuid]
+        )
 
-            # Convert from byte array to float (4 bytes per float)
-            ax = struct.unpack('f', ax)[0]
-            ay = struct.unpack('f', ay)[0]
-            az = struct.unpack('f', az)[0]
-            gx = struct.unpack('f', gx)[0]
-            gy = struct.unpack('f', gy)[0]
-            gz = struct.unpack('f', gz)[0]
-
-            # debug: print data
-            # print(f"ax is {ax}, ")
-            # print(f"ay is {ay}, ")
-            # print(f"az is {az}, ")
-            # print(f"time is {time}, ")
-
-            # send data to queue
-            await dataQueue.put((ax, ay, az, gx, gy, gz, time))
-
-            # pause data collection (might need to account for this in sensor readings)
-            await asyncio.sleep(0.05)
-
-    except asyncio.CancelledError:
-        print("Disconnecting...")
-    except KeyboardInterrupt:
-        print("Keyboard interrupt received. Disconnecting...")
-    except Exception as e:
-        print(f"Error interacting with characteristic: {e}")
-
-
-
-# async function that allows user to select sensor to bluetooth to
-async def ble_connect_imu(dataQueue):
-    print("Scanning for devices...")
-
-    devices = await BleakScanner.discover()
-
-    if not devices:
-        print("No devices found. Make sure Bluetooth is enabled and try again.")
-        return
-
-    print("\nFound devices:")
-    for i, device in enumerate(devices):
-        print(f"{i}: {device.name} ({device.address})")
-
-    try:
-        choice = int(input("\nEnter the number of the device you want to connect to: "))
-        if choice < 0 or choice >= len(devices):
-            print("Invalid choice. Exiting.")
+        if not devices:
+            self.status.emit("No devices found. Make sure Bluetooth is enabled and try again.")
             return
-    except ValueError:
-        print("Invalid input. Please enter a number. Exiting.")
-        return
+        else:
+            self.status.emit(f"Found {len(devices)} device(s).")
 
-    print(f"choice is {choice}\n")
-    selected_device = devices[choice]
-    print(f"\nConnecting to {selected_device.name} ({selected_device.address})...")
+        return devices
+    
+    # ------------------------------------------------------
+    # Connect to IMU device via address
+    # ------------------------------------------------------
+    async def connect(
+        self,
+        data_queue,
+        service_uuid,
+        time_uuid,
+        accel_x_uuid,
+        accel_y_uuid,
+        accel_z_uuid,
+        gyro_x_uuid,
+        gyro_y_uuid,
+        gyro_z_uuid,
+    ):
+        """
+        Connects to the device advertising the given service UUID.
+        """
+        # Scan for devices that advertise this service
+        devices = await self.scan_devices(service_uuid)
 
-    async with BleakClient(selected_device.address, timeout=20) as client:
-        if not client.is_connected:
-            print(f"Failed to connect to {selected_device.name}.")
+        # exit early if there is no device in range
+        if not devices:
             return
+        
+        # select the first device
+        dev = devices[0]
+        self.status.emit(f"Connecting to {dev.name} ({dev.address})...")
+        
+        self.client = BleakClient(dev.address, timeout=20)
 
-        print(f"Connected to {selected_device.name}.")
+        try:
+            await self.client.connect()
+        except Exception as e:
+            self.status.emit(f"Failed to connect: {e}")
 
-        #begin reading IMU data
-        await ble_read_imu_data(client, dataQueue)
+        if not self.client.is_connected:
+            self.status.emit("Connection failed.")
+
+        self.status.emit("Connected!")
+        self.is_connected = True
+
+        # Start async IMU polling loop
+        self.read_task = asyncio.create_task(
+            self._read_imu_loop(
+                data_queue,
+                time_uuid,
+                accel_x_uuid,
+                accel_y_uuid,
+                accel_z_uuid,
+                gyro_x_uuid,
+                gyro_y_uuid,
+                gyro_z_uuid,
+            )
+        )
+
+    # ------------------------------------------------------
+    # Disconnect cleanly
+    # ------------------------------------------------------
+    async def disconnect(self):
+        self.is_connected = False
+
+        if self.read_task:
+            self.read_task.cancel()
+            try:
+                await self.read_task
+            except asyncio.CancelledError:
+                pass
+
+        if self.client:
+            try:
+                await self.client.disconnect()
+            except Exception:
+                pass
+
+        self.client = None
+
+    # ------------------------------------------------------
+    # Internal IMU polling loop
+    # ------------------------------------------------------
+    async def _read_imu_loop(
+        self, 
+        data_queue,
+        time_uuid,
+        accel_x_uuid,
+        accel_y_uuid,
+        accel_z_uuid,
+        gyro_x_uuid,
+        gyro_y_uuid,
+        gyro_z_uuid,
+    ):
+        """
+        Continuously read characteristics from IMU and enqueue parsed values.
+        """
+        self.status.emit("Starting IMU data streaming...")
+
+        try:
+            while self.is_connected:
+                # Read raw byte values
+                ax = await self.client.read_gatt_char(accel_x_uuid)
+                ay = await self.client.read_gatt_char(accel_y_uuid)
+                az = await self.client.read_gatt_char(accel_z_uuid)
+                gx = await self.client.read_gatt_char(gyro_x_uuid)
+                gy = await self.client.read_gatt_char(gyro_y_uuid)
+                gz = await self.client.read_gatt_char(gyro_z_uuid)
+                time_bytes = await self.client.read_gatt_char(time_uuid)
+
+                # Convert to int/float
+                ax = struct.unpack("f", ax)[0]
+                ay = struct.unpack("f", ay)[0]
+                az = struct.unpack("f", az)[0]
+                gx = struct.unpack("f", gx)[0]
+                gy = struct.unpack("f", gy)[0]
+                gz = struct.unpack("f", gz)[0]
+                t = int.from_bytes(time_bytes, byteorder='little', signed=False)
+
+                await data_queue.put((ax, ay, az, gx, gy, gz, t))
+
+                await asyncio.sleep(0.05)
+
+        except asyncio.CancelledError:
+            self.status.emit("IMU read loop cancelled (disconnect).")
+
+        except Exception as e:
+            self.status.emit(f"IMU read error: {e}")
