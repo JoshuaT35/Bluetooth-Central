@@ -19,27 +19,94 @@
 import asyncio
 import matplotlib.pyplot as plt
 
-from bluetooth import ble_connect_imu
+from PySide6.QtWidgets import QApplication
+from qasync import QEventLoop
+
 from visualization import plot_2d_data, plot_3d_data
+from device_profiles import AVAILABLE_DEVICES
+from gui import MainWindow
+import bluetooth as blt
 
-async def main():
-    # figure and axis for 2D plot
-    fig, ax = plt.subplots()
 
-    # stores collected data
+async def scan(gui, ble):
+    """
+    Callback triggered when the Scan button is clicked.
+    Uses the selected device profile from the GUI.
+    """
+    profile = gui.selected_profile
+    if not profile:
+        gui.append_log("No device profile selected.")
+        return
+
+    devices = await ble.scan_devices(profile["SERVICE_UUID"])
+    if devices:
+        for d in devices:
+            gui.append_log(f"Found: {d.name}  ({d.address})")
+
+
+async def connect_and_stream(gui, ble, data_queue):
+    """
+    Connect to first matching device and start IMU read loop.
+    """
+    profile = gui.selected_profile
+    if not profile:
+        gui.append_log("No device profile selected.")
+        return
+
+    await ble.connect(
+        data_queue,
+        profile["SERVICE_UUID"],
+        profile["TIME_UUID"],
+        profile["ACCEL_X_UUID"],
+        profile["ACCEL_Y_UUID"],
+        profile["ACCEL_Z_UUID"],
+        profile["GYRO_X_UUID"],
+        profile["GYRO_Y_UUID"],
+        profile["GYRO_Z_UUID"],
+    )
+
+
+async def main_async():
+    """
+    Runs inside the qasync event loop.
+    """
+    # Qt application
+    # app = QApplication(sys.argv)
+    app = QApplication()
+
+    # qasync event loop
+    loop = QEventLoop(app)
+    asyncio.set_event_loop(loop)
+
+    # BLE + GUI setup
+    ble = blt.BLEImuManager()
+    gui = MainWindow(AVAILABLE_DEVICES)
+
+    # Forward BLE log messages into GUI
+    ble.status.connect(gui.append_log)
+
+    # Data queue for IMU readings
     data_queue = asyncio.Queue()
 
-    # create BLE connection and data collection tasks
-    ble_task = asyncio.create_task(ble_connect_imu(data_queue))
-    plot_task = asyncio.create_task(plot_2d_data(ax, data_queue))
+    # Button wiring
+    gui.scan_button.clicked.connect(
+        lambda: asyncio.create_task(scan(gui, ble))
+    )
+    gui.connect_button.clicked.connect(
+        lambda: asyncio.create_task(connect_and_stream(gui, ble, data_queue))
+    )
 
-    # main waits for these tasks to complete (which is ideally never)
-    await ble_task
-    await plot_task
+    gui.show()
 
-    # idk if this works, might be a replacement for the above awaits
-    # await asyncio.gather(ble_task, plot_task)
+    # 2D Matplotlib figure
+    fig, ax = plt.subplots()
+
+    # Plot loop
+    loop.create_task(plot_2d_data(ax, data_queue))
+
+    # Run forever
+    with loop:
+        loop.run_forever()
 
 if __name__ == "__main__":
-    asyncio.run(main())
-    plt.show()
+    asyncio.run(main_async())
