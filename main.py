@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 from PySide6.QtWidgets import QApplication
 from qasync import QEventLoop
 
-from visualization import plot_2d_data, plot_3d_data
+from visualization import plot_2d_data
 from device_profiles import AVAILABLE_DEVICES
 from gui import MainWindow
 import bluetooth as blt
@@ -66,6 +66,19 @@ async def connect_and_stream(gui, ble, data_queue):
     )
 
 
+async def disconnect(gui, ble):
+    """
+    Disconnect from the Bluetooth device.
+    """
+    if not ble.is_connected:
+        gui.append_log("No device is currently connected.")
+        return
+
+    gui.append_log("Disconnecting...")
+    await ble.disconnect()
+    gui.append_log("Disconnected.")
+
+
 async def main_async():
     """
     Runs inside the qasync event loop.
@@ -95,14 +108,38 @@ async def main_async():
     gui.connect_button.clicked.connect(
         lambda: asyncio.create_task(connect_and_stream(gui, ble, data_queue))
     )
+    gui.disconnect_button.clicked.connect(
+        lambda: asyncio.create_task(disconnect(gui, ble))
+    )
+
+    # Write Low Power Mode
+    gui.low_power_button.clicked.connect(
+        lambda: asyncio.create_task(
+            ble.set_power_mode(
+                gui.selected_profile["POWER_MODE_UUID"],
+                0  # MODE_LOW
+            )
+        )
+    )
+
+    # Write High Power Mode
+    gui.high_power_button.clicked.connect(
+        lambda: asyncio.create_task(
+            ble.set_power_mode(
+                gui.selected_profile["POWER_MODE_UUID"],
+                1  # MODE_HIGH
+            )
+        )
+    )
 
     gui.show()
 
-    # 2D Matplotlib figure
-    fig, ax = plt.subplots()
+    # Use GUI's axes
+    ax = gui.ax
+    canvas = gui.canvas
 
     # Plot loop
-    loop.create_task(plot_2d_data(ax, data_queue))
+    loop.create_task(plot_2d_data(ax, canvas, data_queue))
 
     # Run forever
     with loop:
