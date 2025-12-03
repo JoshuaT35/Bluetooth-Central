@@ -167,12 +167,35 @@ class BLEImuManager(QObject):
                 gz = struct.unpack("f", gz)[0]
                 t = int.from_bytes(time_bytes, byteorder='little', signed=False)
 
+                # add to the data queue
                 await data_queue.put((ax, ay, az, gx, gy, gz, t))
 
-                await asyncio.sleep(0.05)
+                await asyncio.sleep(0.0005)
 
         except asyncio.CancelledError:
             self.status.emit("IMU read loop cancelled (disconnect).")
 
         except Exception as e:
             self.status.emit(f"IMU read error: {e}")
+
+
+    # ------------------------------------------------------
+    # Write to IMU to turn on certain modes (i.e LOW and HIGH power modes)
+    # ------------------------------------------------------
+    async def set_power_mode(self, power_mode_uuid: str, mode: int):
+        """
+        Write a uint8 (0 or 1) to the IMU power mode characteristic.
+        mode: 0 = LOW, 1 = HIGH
+        """
+        if not self.client or not self.client.is_connected:
+            self.status.emit("Not connected — cannot change power mode.")
+            return
+
+        try:
+            # uint8 payload
+            data = bytes([mode])
+            await self.client.write_gatt_char(power_mode_uuid, data)
+            self.status.emit(f"Power mode written: {mode}")
+
+        except Exception as e:
+            self.status.emit(f"Failed to write power mode: {e}")

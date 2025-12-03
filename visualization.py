@@ -4,27 +4,36 @@ import numpy as np
 from ahrs.filters import Madgwick
 from ahrs.common.orientation import q2euler
 from math import atan2, sqrt, pi, radians
+from PySide6.QtCore import QTimer
+import asyncio
 
 MAX_NUM_DATA_PLOT = 100
 
-def rotate_to_world_frame(ax, ay, az, pitch_deg, roll_deg):
-    pitch = radians(pitch_deg)
-    roll = radians(roll_deg)
 
-    R = np.array([
-        [np.cos(pitch), np.sin(roll)*np.sin(pitch), np.cos(roll)*np.sin(pitch)],
-        [0,             np.cos(roll),              -np.sin(roll)],
-        [-np.sin(pitch), np.sin(roll)*np.cos(pitch), np.cos(roll)*np.cos(pitch)]
-    ])
+async def test_loop(ax, canvas, data_queue):
 
-    acc_body = np.array([ax, ay, az])
-    acc_world = R @ acc_body
-    return acc_world
+    def foo():
+        if data_queue.empty():
+            # print("Queue is empty")
+            return
+
+        try:
+            data = data_queue.get_nowait()
+        except asyncio.QueueEmpty:
+            # print("Queue empty exception")
+            return
+
+        x, y, z, gx, gy, gz, t = data
+        # print("x is", x)
+
+    # QTimer must have a Qt parent to survive
+    timer = QTimer(canvas)
+    timer.timeout.connect(foo)
+    timer.start(50)
 
 ## --- 2d plotting ---
-async def plot_2d_data(ax, data_queue):
+async def plot_2d_data(ax, canvas, data_queue):
     # data lists to store timestamps and x, y, z values
-    # NOTE: use a queue or deque instead to avoid memory overflow?
     xdata, ydata, zdata = [], [], []
     timestamp = []
     first_time_unit = 0
@@ -32,115 +41,140 @@ async def plot_2d_data(ax, data_queue):
     # to check if this is the first reading we get
     initial_reading = True
 
-    # continuously retrieve data and plot it
-    while True:
-        # get data
-        data = await data_queue.get()
-        x, y, z, gx, gy, gz, t = data
+    # Set up QTimer to periodically update the plot
+    def update_plot():
+        nonlocal xdata, ydata, zdata, timestamp, first_time_unit, initial_reading
+        try:
+            if not data_queue.empty():
+                # Get data
+                data = data_queue.get_nowait()
+                x, y, z, gx, gy, gz, t = data
 
-        # mark the initial reading
-        if initial_reading:
-            initial_reading = False
-            first_time_unit = t
-        
-        # Append the data to respective lists for plotting
-        # first time unit may not be 0.
-        # to set scale to begin at 0, we do current time (t) - previous time unit (first_time_unit)
-        timestamp.append(t-first_time_unit)
-        xdata.append(x)
-        ydata.append(y)
-        zdata.append(z)
-        
-        # Clear the plot to redraw it with the updated data
-        ax.clear()
-        
-        # Plot x, y, z values with respect to time (timestamp)
-        ax.plot(timestamp, xdata, label="X", color="r")
-        ax.plot(timestamp, ydata, label="Y", color="g")
-        ax.plot(timestamp, zdata, label="Z", color="b")
-        
-        ax.set_xlabel('Time (ms)')  # Label for x-axis
-        ax.set_ylabel('Values')  # Label for y-axis
-        ax.set_title('Real-Time Plot of x, y, z')  # Title of the plot
-        
-        ax.legend()  # Show legend
-        
-        plt.draw()  # Redraw the plot
-        plt.pause(0.05)  # Non-blocking pause to update the plot
+                # Mark the initial reading
+                if initial_reading:
+                    initial_reading = False
+                    first_time_unit = t
+                
+                # Append the data to respective lists for plotting
+                timestamp.append(t - first_time_unit)
+                xdata.append(x)
+                ydata.append(y)
+                zdata.append(z)
+                
+                # Clear the plot to redraw it with the updated data
+                ax.clear()
+                
+                # Plot x, y, z values with respect to time (timestamp)
+                ax.plot(timestamp, xdata, label="X", color="r")
+                ax.plot(timestamp, ydata, label="Y", color="g")
+                ax.plot(timestamp, zdata, label="Z", color="b")
+                
+                ax.set_xlabel('Time (ms)')  # Label for x-axis
+                ax.set_ylabel('Values')  # Label for y-axis
+                ax.set_title('Real-Time Plot of x, y, z')  # Title of the plot
+                
+                ax.legend()  # Show legend
+                
+                canvas.draw()  # Redraw the plot
+        except Exception as e:
+            print(f"Plot update error: {e}")
+    
+    # Set up QTimer to update the plot periodically (e.g., every 50ms)
+    timer = QTimer(canvas)
+    timer.timeout.connect(update_plot)
+    timer.start(25)  # Update every 25ms
 
-async def plot_3d_data(axes, data_queue):
-    prev_time = None
-    prev_vel = np.zeros(3)
-    prev_pos = np.zeros(3)
 
-    xdata = collections.deque(maxlen=MAX_NUM_DATA_PLOT)
-    ydata = collections.deque(maxlen=MAX_NUM_DATA_PLOT)
-    zdata = collections.deque(maxlen=MAX_NUM_DATA_PLOT)
 
-    # Complementary Filter init
-    pitch_cf = 0.0
-    roll_cf = 0.0
-    alpha = 0.98
+# def rotate_to_world_frame(ax, ay, az, pitch_deg, roll_deg):
+#     pitch = radians(pitch_deg)
+#     roll = radians(roll_deg)
 
-    # Madgwick Filter init
-    madgwick = Madgwick()
-    q = np.array([1.0, 0.0, 0.0, 0.0])
+#     R = np.array([
+#         [np.cos(pitch), np.sin(roll)*np.sin(pitch), np.cos(roll)*np.sin(pitch)],
+#         [0,             np.cos(roll),              -np.sin(roll)],
+#         [-np.sin(pitch), np.sin(roll)*np.cos(pitch), np.cos(roll)*np.cos(pitch)]
+#     ])
 
-    while True:
-        # Fetch sensor data
-        ax, ay, az, gx, gy, gz, timestamp = await data_queue.get()
+#     acc_body = np.array([ax, ay, az])
+#     acc_world = R @ acc_body
+#     return acc_world
 
-        # Convert g to m/s^2
-        ax *= 9.81
-        ay *= 9.81
-        az *= 9.81
 
-        # Skip first reading
-        if prev_time is None:
-            prev_time = timestamp
-            continue
 
-        # Time delta in seconds
-        dt = (timestamp - prev_time) / 1000.0
+# async def plot_3d_data(axes, data_queue):
+#     prev_time = None
+#     prev_vel = np.zeros(3)
+#     prev_pos = np.zeros(3)
 
-        ### --- Complementary Filter ---
-        accelPitch = atan2(ax, sqrt(ay**2 + az**2)) * 180 / pi
-        accelRoll  = atan2(ay, sqrt(ax**2 + az**2)) * 180 / pi
+#     xdata = collections.deque(maxlen=MAX_NUM_DATA_PLOT)
+#     ydata = collections.deque(maxlen=MAX_NUM_DATA_PLOT)
+#     zdata = collections.deque(maxlen=MAX_NUM_DATA_PLOT)
 
-        pitch_cf = alpha * (pitch_cf + gy * dt) + (1 - alpha) * accelPitch
-        roll_cf  = alpha * (roll_cf  + gx * dt) + (1 - alpha) * accelRoll
+#     # Complementary Filter init
+#     pitch_cf = 0.0
+#     roll_cf = 0.0
+#     alpha = 0.98
 
-        ### --- Madgwick Filter Update ---
-        gyro_rad = np.radians([gx, gy, gz])  # convert deg/s to rad/s
-        acc = np.array([ax, ay, az])
-        q = madgwick.updateIMU(q=q, gyr=gyro_rad, acc=acc)
+#     # Madgwick Filter init
+#     madgwick = Madgwick()
+#     q = np.array([1.0, 0.0, 0.0, 0.0])
 
-        # Get roll, pitch, yaw from quaternion
-        roll_m, pitch_m, yaw_m = np.degrees(q2euler(q))
+#     while True:
+#         # Fetch sensor data
+#         ax, ay, az, gx, gy, gz, timestamp = await data_queue.get()
 
-        ### --- Acceleration in world frame (using complementary filter angles) ---
-        acc_world = rotate_to_world_frame(ax, ay, az, pitch_cf, roll_cf)
+#         # Convert g to m/s^2
+#         ax *= 9.81
+#         ay *= 9.81
+#         az *= 9.81
 
-        # Remove gravity from Z
-        acc_world[2] -= 9.81
+#         # Skip first reading
+#         if prev_time is None:
+#             prev_time = timestamp
+#             continue
 
-        ### --- Integrate to get velocity and position ---
-        current_vel = prev_vel + acc_world * dt
-        current_pos = prev_pos + current_vel * dt
+#         # Time delta in seconds
+#         dt = (timestamp - prev_time) / 1000.0
 
-        # Store for plotting
-        xdata.append(current_pos[0])
-        ydata.append(current_pos[1])
-        zdata.append(current_pos[2])
+#         ### --- Complementary Filter ---
+#         accelPitch = atan2(ax, sqrt(ay**2 + az**2)) * 180 / pi
+#         accelRoll  = atan2(ay, sqrt(ax**2 + az**2)) * 180 / pi
 
-        # Update previous values
-        prev_time = timestamp
-        prev_vel = current_vel
-        prev_pos = current_pos
+#         pitch_cf = alpha * (pitch_cf + gy * dt) + (1 - alpha) * accelPitch
+#         roll_cf  = alpha * (roll_cf  + gx * dt) + (1 - alpha) * accelRoll
 
-        ### --- Plot ---
-        axes.clear()
-        axes.plot3D(list(xdata), list(ydata), list(zdata), 'gray')
-        axes.set_title(f"Roll: {roll_cf:.2f}° | Pitch: {pitch_cf:.2f}°\nMadgwick RPY: {roll_m:.1f}°, {pitch_m:.1f}°, {yaw_m:.1f}°")
-        plt.draw()
-        plt.pause(0.05)
+#         ### --- Madgwick Filter Update ---
+#         gyro_rad = np.radians([gx, gy, gz])  # convert deg/s to rad/s
+#         acc = np.array([ax, ay, az])
+#         q = madgwick.updateIMU(q=q, gyr=gyro_rad, acc=acc)
+
+#         # Get roll, pitch, yaw from quaternion
+#         roll_m, pitch_m, yaw_m = np.degrees(q2euler(q))
+
+#         ### --- Acceleration in world frame (using complementary filter angles) ---
+#         acc_world = rotate_to_world_frame(ax, ay, az, pitch_cf, roll_cf)
+
+#         # Remove gravity from Z
+#         acc_world[2] -= 9.81
+
+#         ### --- Integrate to get velocity and position ---
+#         current_vel = prev_vel + acc_world * dt
+#         current_pos = prev_pos + current_vel * dt
+
+#         # Store for plotting
+#         xdata.append(current_pos[0])
+#         ydata.append(current_pos[1])
+#         zdata.append(current_pos[2])
+
+#         # Update previous values
+#         prev_time = timestamp
+#         prev_vel = current_vel
+#         prev_pos = current_pos
+
+#         ### --- Plot ---
+#         axes.clear()
+#         axes.plot3D(list(xdata), list(ydata), list(zdata), 'gray')
+#         axes.set_title(f"Roll: {roll_cf:.2f}° | Pitch: {pitch_cf:.2f}°\nMadgwick RPY: {roll_m:.1f}°, {pitch_m:.1f}°, {yaw_m:.1f}°")
+#         plt.draw()
+#         plt.pause(0.05)

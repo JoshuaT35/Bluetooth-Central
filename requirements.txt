@@ -11,5 +11,10 @@ numpy==2.3.5
 packaging==25.0
 pillow==12.0.0
 pyparsing==3.2.5
+PySide6==6.10.1
+PySide6_Addons==6.10.1
+PySide6_Essentials==6.10.1
 python-dateutil==2.9.0.post0
+qasync==0.28.0
+shiboken6==6.10.1
 six==1.17.0
