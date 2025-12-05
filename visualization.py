@@ -6,6 +6,7 @@ from ahrs.common.orientation import q2euler
 from math import atan2, sqrt, pi, radians
 from PySide6.QtCore import QTimer
 import asyncio
+import csv
 
 MAX_NUM_DATA_PLOT = 100
 
@@ -41,6 +42,11 @@ async def plot_2d_data(ax, canvas, data_queue):
     # to check if this is the first reading we get
     initial_reading = True
 
+    # Create/open CSV file and write header
+    csv_file = open("accel_log.csv", "w", newline="")
+    csv_writer = csv.writer(csv_file)
+    csv_writer.writerow(["time", "accel_x", "accel_y", "accel_z"])
+
     # Set up QTimer to periodically update the plot
     def update_plot():
         nonlocal xdata, ydata, zdata, timestamp, first_time_unit, initial_reading
@@ -54,24 +60,30 @@ async def plot_2d_data(ax, canvas, data_queue):
                 if initial_reading:
                     initial_reading = False
                     first_time_unit = t
+
+                # get relative time
+                rel_time = t - first_time_unit
                 
                 # Append the data to respective lists for plotting
-                timestamp.append(t - first_time_unit)
+                timestamp.append(rel_time)
                 xdata.append(x)
                 ydata.append(y)
                 zdata.append(z)
+
+                # ⭐ Write directly to CSV (no RAM accumulation)
+                csv_writer.writerow([rel_time, x, y, z])
                 
                 # Clear the plot to redraw it with the updated data
                 ax.clear()
                 
                 # Plot x, y, z values with respect to time (timestamp)
-                ax.plot(timestamp, xdata, label="X", color="r")
-                ax.plot(timestamp, ydata, label="Y", color="g")
-                ax.plot(timestamp, zdata, label="Z", color="b")
+                ax.plot(timestamp, xdata, label="X-axes", color="r")
+                ax.plot(timestamp, ydata, label="Y-axes", color="g")
+                ax.plot(timestamp, zdata, label="Z-axes", color="b")
                 
                 ax.set_xlabel('Time (ms)')  # Label for x-axis
                 ax.set_ylabel('Values')  # Label for y-axis
-                ax.set_title('Real-Time Plot of x, y, z')  # Title of the plot
+                ax.set_title('Real-Time Plot of acceleration in x, y, z, axis')  # Title of the plot
                 
                 ax.legend()  # Show legend
                 
@@ -82,7 +94,10 @@ async def plot_2d_data(ax, canvas, data_queue):
     # Set up QTimer to update the plot periodically (e.g., every 50ms)
     timer = QTimer(canvas)
     timer.timeout.connect(update_plot)
-    timer.start(25)  # Update every 25ms
+    timer.start(10)  # Update every 25ms
+
+    # Ensure file closes when the window closes
+    canvas.destroyed.connect(lambda: csv_file.close())
 
 
 
