@@ -22,10 +22,10 @@ import matplotlib.pyplot as plt
 from PySide6.QtWidgets import QApplication
 from qasync import QEventLoop
 
-from visualization import plot_2d_data
-from device_profiles import AVAILABLE_DEVICES
-from gui import MainWindow
-import bluetooth as blt
+from plotting.visualization import plot_2d_data
+from core.device_profiles import AVAILABLE_DEVICES
+from gui.main_window import MainWindow
+from bluetooth.ble_imu_manager import BLEImuManager
 
 
 async def scan(gui, ble):
@@ -92,7 +92,7 @@ async def main_async():
     asyncio.set_event_loop(loop)
 
     # BLE + GUI setup
-    ble = blt.BLEImuManager()
+    ble = BLEImuManager()
     gui = MainWindow(AVAILABLE_DEVICES)
 
     # Forward BLE log messages into GUI
