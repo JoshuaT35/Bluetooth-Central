@@ -54,7 +54,7 @@ async def plot_2d_data(ax, canvas, data_queue):
             if not data_queue.empty():
                 # Get data
                 data = data_queue.get_nowait()
-                ax, ay, az, gx, gy, gz, t = data
+                accel_x, accel_y, accel_z, gyro_x, gyro_y, gyro_z, t = data
 
                 # Mark the initial reading
                 if initial_reading:
@@ -66,12 +66,12 @@ async def plot_2d_data(ax, canvas, data_queue):
                 
                 # Append the data to respective lists for plotting
                 timestamp.append(rel_time)
-                xdata.append(ax)
-                ydata.append(ay)
-                zdata.append(az)
+                xdata.append(accel_x)
+                ydata.append(accel_y)
+                zdata.append(accel_z)
 
                 # ⭐ Write directly to CSV (no RAM accumulation)
-                csv_writer.writerow([rel_time, ax, ay, az, gx, gy, gz])
+                csv_writer.writerow([rel_time, accel_x, accel_y, accel_z, gyro_x, gyro_y, gyro_z])
                 
                 # Clear the plot to redraw it with the updated data
                 ax.clear()

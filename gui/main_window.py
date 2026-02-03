@@ -1,5 +1,5 @@
 import os
-import sys
+import asyncio
 
 os.environ["QT_API"] = "PyQt6"
 

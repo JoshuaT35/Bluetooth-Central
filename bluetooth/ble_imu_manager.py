@@ -167,6 +167,9 @@ class BLEImuManager(QObject):
                 gz = struct.unpack("f", gz)[0]
                 t = int.from_bytes(time_bytes, byteorder='little', signed=False)
 
+                # debug: print the data
+                # print(ax, ay, az, time_bytes)
+
                 # add to the data queue
                 await data_queue.put((ax, ay, az, gx, gy, gz, t))
 
